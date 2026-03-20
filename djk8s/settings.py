@@ -78,7 +78,7 @@ WSGI_APPLICATION = 'djk8s.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-if (os.getenv('DJANGO_USE_POSTGRES').lower() == 'true'):
+if (os.getenv('DJANGO_USE_POSTGRES', 'False').lower() == 'true'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
