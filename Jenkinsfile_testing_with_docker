@@ -1,0 +1,91 @@
+pipeline {
+    agent any
+    
+    environment {
+        IMAGE_NAME = 'djk8s'
+    }
+    
+    stages {
+        stage('Checkout code') {
+            steps {
+                git branch: 'develop', url: 'https://github.com/subhash-devopslearner/djk8s.git'
+            }
+        }
+        stage('Cleanup previous files') {
+            steps {
+                echo "Deleting previous containers, env files etc...."
+                
+                sh '''
+                docker stop test-container || true
+                docker rm test-container || true
+                rm .env* || true
+                '''
+            }
+        }
+        stage('Copy env file') {
+            steps {
+                echo "Copy env file...."
+                
+                withCredentials([file(credentialsId: 'DJK8S_ENV_TESTING', variable: 'DJK8S_TESTING')]) {
+                sh '''
+                cp $DJK8S_TESTING .env.testing
+                '''
+                }
+            }
+        }
+        stage('Create virtual environment') {
+            steps {
+                echo "Creating virtual environment for Django app...."
+                
+                sh '''
+                python3 -m venv venv
+                . venv/bin/activate
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt
+                '''
+            }
+        }
+        stage('Test project') {
+            steps {
+                echo "Running Django tests locally....."
+                
+                sh '''
+                . venv/bin/activate
+                python manage.py test --noinput
+                '''
+            }
+        }
+        stage('Build docker image') {
+            steps {
+                echo "Building docker image....."
+                
+                sh '''
+                docker build -t djk8s .
+                '''
+            }
+        }
+        stage('Deploy docker image and test') {
+            steps {
+                echo "Running docker container to test docker image....."
+                
+                sh '''
+                docker run -d --rm --name test-container -p 8002:8000 -e ENV_FILE_PATH=.env.testing --env-file .env.testing $IMAGE_NAME
+                sleep 5
+                docker exec test-container python manage.py test --noinput
+                curl localhost:8002
+                '''
+            }
+        }
+    }
+    post {
+        always {
+            echo "Removing containers, and env files...."
+            
+            sh '''
+            docker stop test-container || true
+            docker rm test-container || true
+            rm .env* || true
+            '''
+        }
+    }
+}
